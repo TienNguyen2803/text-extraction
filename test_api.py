@@ -1,11 +1,29 @@
 
 import requests
 import os
+import time
+
+def wait_for_server(max_attempts=10):
+    """Wait for server to be ready"""
+    for i in range(max_attempts):
+        try:
+            response = requests.get("http://0.0.0.0:5000/", timeout=5)
+            if response.status_code == 200:
+                return True
+        except requests.exceptions.ConnectionError:
+            print(f"Attempting to connect... ({i+1}/{max_attempts})")
+            time.sleep(2)
+    return False
 
 def test_health_check():
     """Test health check endpoint"""
-    response = requests.get("http://0.0.0.0:5000/")
-    print("Health check:", response.json())
+    try:
+        response = requests.get("http://0.0.0.0:5000/", timeout=10)
+        print("Health check:", response.json())
+        return True
+    except Exception as e:
+        print(f"Health check failed: {e}")
+        return False
 
 def test_document_processing():
     """Test document processing endpoint"""
@@ -34,5 +52,12 @@ def test_document_processing():
     os.remove("test.txt")
 
 if __name__ == "__main__":
-    test_health_check()
-    test_document_processing()
+    print("Waiting for server to start...")
+    if wait_for_server():
+        print("Server is ready!")
+        if test_health_check():
+            test_document_processing()
+        else:
+            print("Server health check failed")
+    else:
+        print("Could not connect to server. Make sure the API is running on port 5000")

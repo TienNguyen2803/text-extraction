@@ -2,11 +2,10 @@ import asyncio
 import tempfile
 import os
 from typing import Optional
-try:
-    from unstructured.partition.auto import partition
-except ImportError:
-    # Fallback if unstructured has issues
-    partition = None
+
+# Set partition to None to force fallback
+partition = None
+
 import pdfplumber
 from PyPDF2 import PdfReader
 

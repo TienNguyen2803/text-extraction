@@ -1,9 +1,6 @@
 
 import asyncio
 from typing import Dict, List, Any
-from presidio_analyzer import AnalyzerEngine
-from presidio_anonymizer import AnonymizerEngine
-import scrubadub
 import re
 
 class PIIAnonymizationService:
@@ -11,13 +8,11 @@ class PIIAnonymizationService:
     
     def __init__(self):
         """Initialize PII anonymization engines."""
-        self.presidio_analyzer = AnalyzerEngine()
-        self.presidio_anonymizer = AnonymizerEngine()
-        self.scrubadub_scrubber = scrubadub.Scrubber()
+        pass
         
     async def anonymize_text(self, text: str) -> Dict[str, Any]:
         """
-        Anonymize PII in text using multiple libraries.
+        Anonymize PII in text using regex patterns.
         
         Args:
             text: Input text to anonymize
@@ -26,86 +21,70 @@ class PIIAnonymizationService:
             Dictionary containing anonymized text and PII analysis
         """
         try:
-            # Run PII detection and anonymization in thread pool
+            # Run PII detection and anonymization
             loop = asyncio.get_event_loop()
             
-            # Presidio analysis
-            presidio_results = await loop.run_in_executor(
-                None, 
-                self._analyze_with_presidio, 
+            # Find entities using regex
+            entities_found = await loop.run_in_executor(
+                None,
+                self._find_entities_regex,
                 text
             )
             
-            # Anonymize with Presidio
-            presidio_anonymized = await loop.run_in_executor(
+            # Anonymize text using regex
+            anonymized_text = await loop.run_in_executor(
                 None,
-                self._anonymize_with_presidio,
-                text,
-                presidio_results
+                self._anonymize_with_regex,
+                text
             )
-            
-            # Additional anonymization with Scrubadub
-            scrubadub_anonymized = await loop.run_in_executor(
-                None,
-                self._anonymize_with_scrubadub,
-                presidio_anonymized
-            )
-            
-            # Additional anonymization with anonympy patterns
-            final_anonymized = await loop.run_in_executor(
-                None,
-                self._anonymize_with_anonympy,
-                scrubadub_anonymized
-            )
-            
-            # Convert Presidio results to our format
-            entities_found = []
-            for result in presidio_results:
-                entities_found.append({
-                    "type": result.entity_type,
-                    "text": text[result.start:result.end],
-                    "start_char": result.start,
-                    "end_char": result.end
-                })
             
             return {
-                "anonymized_text": final_anonymized,
+                "anonymized_text": anonymized_text,
                 "entities_found": entities_found
             }
             
         except Exception as e:
             raise Exception(f"PII anonymization failed: {str(e)}")
     
-    def _analyze_with_presidio(self, text: str):
-        """Analyze text with Presidio for PII detection."""
-        return self.presidio_analyzer.analyze(
-            text=text,
-            language='en',
-            entities=["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", 
-                     "SSN", "IBAN_CODE", "IP_ADDRESS", "DATE_TIME", "LOCATION",
-                     "ORGANIZATION", "URL"]
-        )
+    def _find_entities_regex(self, text: str) -> List[Dict]:
+        """Find PII entities using regex patterns."""
+        entities = []
+        
+        # Email pattern
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        for match in re.finditer(email_pattern, text):
+            entities.append({
+                "type": "EMAIL_ADDRESS",
+                "text": match.group(),
+                "start_char": match.start(),
+                "end_char": match.end()
+            })
+        
+        # Phone number patterns
+        phone_pattern = r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b|\(\d{3}\)\s*\d{3}[-.]?\d{4}'
+        for match in re.finditer(phone_pattern, text):
+            entities.append({
+                "type": "PHONE_NUMBER", 
+                "text": match.group(),
+                "start_char": match.start(),
+                "end_char": match.end()
+            })
+        
+        # Basic name pattern (simple heuristic)
+        name_pattern = r'\b[A-Z][a-z]+ [A-Z][a-z]+\b'
+        for match in re.finditer(name_pattern, text):
+            entities.append({
+                "type": "PERSON",
+                "text": match.group(),
+                "start_char": match.start(),
+                "end_char": match.end()
+            })
+        
+        return entities
     
-    def _anonymize_with_presidio(self, text: str, analyzer_results):
-        """Anonymize text using Presidio."""
-        anonymized_result = self.presidio_anonymizer.anonymize(
-            text=text,
-            analyzer_results=analyzer_results
-        )
-        return anonymized_result.text
-    
-    def _anonymize_with_scrubadub(self, text: str) -> str:
-        """Additional anonymization using Scrubadub."""
+    def _anonymize_with_regex(self, text: str) -> str:
+        """Anonymize text using regex patterns."""
         try:
-            return self.scrubadub_scrubber.clean(text)
-        except Exception:
-            # If scrubadub fails, return original text
-            return text
-    
-    def _anonymize_with_anonympy(self, text: str) -> str:
-        """Additional anonymization using anonympy-style patterns."""
-        try:
-            # Implement basic anonympy-style patterns
             # Email pattern
             text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', 
                          '[EMAIL]', text)
@@ -113,6 +92,9 @@ class PIIAnonymizationService:
             # Phone number patterns
             text = re.sub(r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', '[PHONE]', text)
             text = re.sub(r'\(\d{3}\)\s*\d{3}[-.]?\d{4}', '[PHONE]', text)
+            
+            # Basic name pattern
+            text = re.sub(r'\b[A-Z][a-z]+ [A-Z][a-z]+\b', '[PERSON]', text)
             
             # Social Security Number pattern
             text = re.sub(r'\b\d{3}-\d{2}-\d{4}\b', '[SSN]', text)
