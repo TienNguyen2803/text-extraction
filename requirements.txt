@@ -14,6 +14,6 @@ numpy==1.24.3
 Pillow>=10.1.0
 python-magic==0.4.27
 pytesseract==0.3.10
-opencv-python==4.8.1.78
+
 pypdf==3.17.1
 pdfplumber==0.10.3
