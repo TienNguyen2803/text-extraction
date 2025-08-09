@@ -1,0 +1,64 @@
+1. API Endpoint:
+Path: POST /process-document
+Input: A file upload via multipart/form-data. The endpoint should accept a parameter to suggest a processing strategy (e.g., strategy: 'unstructured' or strategy: 'marker').
+Output: A JSONResponse containing the processed data.
+Behavior: The endpoint must be fully asynchronous (async def) to handle concurrent requests efficiently.
+2. Functional Logic & Library Integration:
+You must integrate and use the following five (5) open-source libraries:
+A. Text Extraction Module:
+The goal is to extract text while strictly preserving the original document's layout (columns, tables, charts, and text from scanned PDFs).
+unstructured (unstructured-io/unstructured): Use this as the primary tool for extracting text from a wide range of formats including PDF, Word (DOCX), PowerPoint (PPTX), HTML, and images.
+marker (datalab-to/marker): Use this specifically for high-fidelity conversion of PDF documents to Markdown, which helps preserve complex layouts.
+B. PII Anonymization Module:
+Apply this module to the text extracted in the previous step.
+Microsoft Presidio (microsoft/presidio): Use as a primary engine for PII detection and anonymization.
+Scrubadub (LeapBeyond/scrubadub_spacy): Use as an additional layer for PII scrubbing.
+anonympy (ArtLabss/open-data-anonymizer): Use as another layer for data anonymization.
+Important Note: For Scrubadub and anonympy, the implementation should be prepared to use the newest available commit or fork, not just the latest stable release on PyPI.
+3. Processing Flow:
+Receive a file via the POST /process-document endpoint.
+Based on the file type and/or strategy parameter, select the appropriate text extraction library (unstructured or marker).
+Execute the extraction, ensuring layout preservation is prioritized.
+Pass the extracted text through the PII Anonymization module, applying rules from Presidio, Scrubadub, and anonympy.
+Construct the final JSON output.
+Return the JSON response.
+4. Output JSON Structure:
+The response JSON should be well-structured. Propose and implement a structure similar to this:
+code
+Json
+{
+  "metadata": {
+    "filename": "original_filename.pdf",
+    "file_size_bytes": 1024576,
+    "extraction_engine": "unstructured",
+    "processing_time_ms": 1500
+  },
+  "content": {
+    "layout_preserved_text": "The full extracted text, possibly in Markdown or structured format to represent tables/columns...",
+    "anonymized_text": "The text after PII has been replaced with placeholders like [REDACTED] or [PERSON]...",
+    "pii_analysis": {
+      "entities_found": [
+        {
+          "type": "PERSON",
+          "text": "John Doe",
+          "start_char": 52,
+          "end_char": 60
+        },
+        {
+          "type": "PHONE_NUMBER",
+          "text": "555-123-4567",
+          "start_char": 110,
+          "end_char": 122
+        }
+      ],
+      "anonymization_count": 2
+    }
+  }
+}
+5. Deliverables:
+Please provide the complete source code organized into a logical project structure:
+main.py: The main FastAPI application file defining the endpoint.
+requirements.txt: A file listing all Python dependencies, including fastapi, uvicorn, python-multipart, unstructured, marker-pdf, presidio-analyzer, presidio-anonymizer, scrubadub, anonympy, etc.
+services/ (or similar directory): Separate modules for text_extraction.py and pii_anonymization.py to keep the logic clean and organized.
+Include proper error handling for invalid file types or processing failures.
+Use Python type hints and docstrings for clarity.
