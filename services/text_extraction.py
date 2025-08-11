@@ -1,12 +1,51 @@
 import asyncio
 import tempfile
 import os
+import subprocess
+import glob
 from typing import Optional
 from PIL import Image
 import pytesseract
 
-# Configure tesseract path if needed
-# pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+# Auto-configure tesseract path
+def find_tesseract_path():
+    """Automatically find tesseract executable path."""
+    # Common paths where tesseract might be installed
+    common_paths = [
+        '/usr/bin/tesseract',
+        '/usr/local/bin/tesseract',
+        '/opt/homebrew/bin/tesseract',
+        '/nix/store/*/bin/tesseract'  # Nix path pattern
+    ]
+    
+    # Try to find using 'which' command first
+    try:
+        result = subprocess.run(['which', 'tesseract'], capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except:
+        pass
+    
+    # Try common paths
+    for path in common_paths:
+        if '*' in path:
+            # Handle Nix store paths with glob
+            import glob
+            matches = glob.glob(path)
+            if matches:
+                return matches[0]
+        elif os.path.exists(path):
+            return path
+    
+    return None
+
+# Configure tesseract path
+tesseract_path = find_tesseract_path()
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    print(f"Tesseract found at: {tesseract_path}")
+else:
+    print("Tesseract not found in common paths")
 
 # Set partition to None to force fallback
 partition = None
@@ -173,26 +212,7 @@ class TextExtractionService:
             try:
                 pytesseract.get_tesseract_version()
             except Exception as e:
-                # Try to set common tesseract paths
-                common_paths = [
-                    '/usr/bin/tesseract',
-                    '/usr/local/bin/tesseract',
-                    '/opt/homebrew/bin/tesseract'
-                ]
-                
-                tesseract_found = False
-                for path in common_paths:
-                    if os.path.exists(path):
-                        pytesseract.pytesseract.tesseract_cmd = path
-                        try:
-                            pytesseract.get_tesseract_version()
-                            tesseract_found = True
-                            break
-                        except:
-                            continue
-                
-                if not tesseract_found:
-                    return "Error: Tesseract OCR is not installed. Run: apt-get install -y tesseract-ocr tesseract-ocr-vie"
+                return f"Error: Tesseract OCR is not available. Current path: {pytesseract.pytesseract.tesseract_cmd}. Error: {str(e)}"
             
             # Write content to temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
