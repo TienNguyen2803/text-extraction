@@ -52,6 +52,11 @@ partition = None
 
 import pdfplumber
 from PyPDF2 import PdfReader
+try:
+    from docx import Document
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
 
 class TextExtractionService:
     """Service for extracting text from documents using unstructured library."""
@@ -149,6 +154,8 @@ class TextExtractionService:
             
             if file_ext == '.pdf':
                 return await self._extract_pdf_fallback(file_content)
+            elif file_ext in ['.docx', '.doc']:
+                return await self._extract_word_document(file_content)
             elif file_ext in ['.txt', '.md']:
                 return file_content.decode('utf-8', errors='ignore')
             elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif', '.webp']:
@@ -204,6 +211,61 @@ class TextExtractionService:
             for page in reader.pages:
                 text += page.extract_text() + "\n\n"
             return text.strip()
+
+    async def _extract_word_document(self, file_content: bytes) -> str:
+        """Extract text from Word document using python-docx."""
+        try:
+            if not DOCX_AVAILABLE:
+                return "Error: python-docx library not available for Word document processing."
+            
+            # Write content to temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
+                temp_file.write(file_content)
+                temp_file_path = temp_file.name
+
+            try:
+                # Extract text using python-docx
+                loop = asyncio.get_event_loop()
+                extracted_text = await loop.run_in_executor(None, self._extract_docx_text, temp_file_path)
+                
+                # Clean up
+                os.unlink(temp_file_path)
+                
+                if extracted_text.strip():
+                    return extracted_text.strip()
+                else:
+                    return "No text found in the Word document."
+                    
+            except Exception as e:
+                # Clean up temporary file if error occurs
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                return f"Error extracting text from Word document: {str(e)}"
+                
+        except Exception as e:
+            return f"Error processing Word document: {str(e)}"
+
+    def _extract_docx_text(self, file_path: str) -> str:
+        """Extract text from .docx file using python-docx."""
+        doc = Document(file_path)
+        text_parts = []
+        
+        # Extract text from paragraphs
+        for paragraph in doc.paragraphs:
+            if paragraph.text.strip():
+                text_parts.append(paragraph.text)
+        
+        # Extract text from tables
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = []
+                for cell in row.cells:
+                    if cell.text.strip():
+                        row_text.append(cell.text.strip())
+                if row_text:
+                    text_parts.append(" | ".join(row_text))
+        
+        return "\n\n".join(text_parts)
 
     async def _extract_image_text(self, file_content: bytes) -> str:
         """Extract text from image using OCR."""
