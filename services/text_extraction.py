@@ -5,6 +5,9 @@ from typing import Optional
 from PIL import Image
 import pytesseract
 
+# Configure tesseract path if needed
+# pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+
 # Set partition to None to force fallback
 partition = None
 
@@ -166,6 +169,12 @@ class TextExtractionService:
     async def _extract_image_text(self, file_content: bytes) -> str:
         """Extract text from image using OCR."""
         try:
+            # Check if tesseract is available
+            try:
+                pytesseract.get_tesseract_version()
+            except Exception:
+                return "Error: Tesseract OCR is not installed or configured properly. Please install tesseract-ocr package."
+            
             # Write content to temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
                 temp_file.write(file_content)
@@ -179,14 +188,24 @@ class TextExtractionService:
                 if image.mode != 'RGB':
                     image = image.convert('RGB')
                 
-                # Run OCR in thread pool
+                # Run OCR in thread pool with basic English first
                 loop = asyncio.get_event_loop()
-                extracted_text = await loop.run_in_executor(
-                    None, 
-                    pytesseract.image_to_string, 
-                    image,
-                    'vie+eng'  # Vietnamese + English
-                )
+                try:
+                    # Try with Vietnamese + English
+                    extracted_text = await loop.run_in_executor(
+                        None, 
+                        pytesseract.image_to_string, 
+                        image,
+                        'vie+eng'
+                    )
+                except Exception:
+                    # Fallback to English only
+                    extracted_text = await loop.run_in_executor(
+                        None, 
+                        pytesseract.image_to_string, 
+                        image,
+                        'eng'
+                    )
                 
                 # Clean up
                 os.unlink(temp_file_path)
