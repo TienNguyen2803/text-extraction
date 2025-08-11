@@ -253,19 +253,36 @@ class TextExtractionService:
         # Extract text from paragraphs
         for paragraph in doc.paragraphs:
             if paragraph.text.strip():
-                text_parts.append(paragraph.text)
+                text_parts.append(paragraph.text.strip())
         
-        # Extract text from tables
-        for table in doc.tables:
-            for row in table.rows:
-                row_text = []
+        # Extract text from tables with better formatting
+        for table_idx, table in enumerate(doc.tables):
+            table_text = []
+            table_text.append(f"\n--- Table {table_idx + 1} ---")
+            
+            for row_idx, row in enumerate(table.rows):
+                row_cells = []
                 for cell in row.cells:
-                    if cell.text.strip():
-                        row_text.append(cell.text.strip())
-                if row_text:
-                    text_parts.append(" | ".join(row_text))
+                    # Clean cell text and handle multi-line content
+                    cell_text = cell.text.strip().replace('\n', ' ').replace('\r', '')
+                    if cell_text:
+                        row_cells.append(cell_text)
+                    else:
+                        row_cells.append("")  # Keep empty cells for structure
+                
+                if any(cell.strip() for cell in row_cells):  # Only add non-empty rows
+                    # Format as table row
+                    if row_idx == 0:  # Header row
+                        table_text.append(" | ".join(row_cells))
+                        table_text.append("-" * len(" | ".join(row_cells)))  # Add separator
+                    else:
+                        table_text.append(" | ".join(row_cells))
+            
+            if len(table_text) > 1:  # Only add if table has content
+                text_parts.extend(table_text)
+                text_parts.append("")  # Add spacing after table
         
-        return "\n\n".join(text_parts)
+        return "\n".join(text_parts)
 
     async def _extract_image_text(self, file_content: bytes) -> str:
         """Extract text from image using OCR."""
