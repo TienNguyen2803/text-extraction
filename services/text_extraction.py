@@ -172,8 +172,27 @@ class TextExtractionService:
             # Check if tesseract is available
             try:
                 pytesseract.get_tesseract_version()
-            except Exception:
-                return "Error: Tesseract OCR is not installed or configured properly. Please install tesseract-ocr package."
+            except Exception as e:
+                # Try to set common tesseract paths
+                common_paths = [
+                    '/usr/bin/tesseract',
+                    '/usr/local/bin/tesseract',
+                    '/opt/homebrew/bin/tesseract'
+                ]
+                
+                tesseract_found = False
+                for path in common_paths:
+                    if os.path.exists(path):
+                        pytesseract.pytesseract.tesseract_cmd = path
+                        try:
+                            pytesseract.get_tesseract_version()
+                            tesseract_found = True
+                            break
+                        except:
+                            continue
+                
+                if not tesseract_found:
+                    return "Error: Tesseract OCR is not installed. Run: apt-get install -y tesseract-ocr tesseract-ocr-vie"
             
             # Write content to temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
