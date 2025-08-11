@@ -2,6 +2,8 @@ import asyncio
 import tempfile
 import os
 from typing import Optional
+from PIL import Image
+import pytesseract
 
 # Set partition to None to force fallback
 partition = None
@@ -107,6 +109,8 @@ class TextExtractionService:
                 return await self._extract_pdf_fallback(file_content)
             elif file_ext in ['.txt', '.md']:
                 return file_content.decode('utf-8', errors='ignore')
+            elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif', '.webp']:
+                return await self._extract_image_text(file_content)
             else:
                 # For other file types, try to decode as text
                 return file_content.decode('utf-8', errors='ignore')
@@ -158,6 +162,48 @@ class TextExtractionService:
             for page in reader.pages:
                 text += page.extract_text() + "\n\n"
             return text.strip()
+
+    async def _extract_image_text(self, file_content: bytes) -> str:
+        """Extract text from image using OCR."""
+        try:
+            # Write content to temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+                temp_file.write(file_content)
+                temp_file_path = temp_file.name
+
+            try:
+                # Open image with PIL
+                image = Image.open(temp_file_path)
+                
+                # Convert to RGB if necessary
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+                
+                # Run OCR in thread pool
+                loop = asyncio.get_event_loop()
+                extracted_text = await loop.run_in_executor(
+                    None, 
+                    pytesseract.image_to_string, 
+                    image,
+                    'vie+eng'  # Vietnamese + English
+                )
+                
+                # Clean up
+                os.unlink(temp_file_path)
+                
+                if extracted_text.strip():
+                    return extracted_text.strip()
+                else:
+                    return "No text found in the image."
+                    
+            except Exception as e:
+                # Clean up temporary file if error occurs
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                return f"Error extracting text from image: {str(e)}"
+                
+        except Exception as e:
+            return f"Error processing image file: {str(e)}"
 
     def _get_file_extension(self, filename: str) -> str:
         """Get file extension from filename."""
