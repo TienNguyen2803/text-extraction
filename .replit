@@ -1,4 +1,4 @@
-run =  ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
+run = ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
 entrypoint = "main.py"
 modules = ["python-3.11"]
 
